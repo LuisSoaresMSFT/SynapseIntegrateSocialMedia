@@ -1,0 +1,38 @@
+{
+    "name": "parameterOutputParquet",
+    "properties": {
+        "linkedServiceName": {
+            "referenceName": "Your-Synapse-Workspace-Name-WorkspaceDefaultStorage",
+            "type": "LinkedServiceReference"
+        },
+        "parameters": {
+            "P_FILE_PATH": {
+                "type": "string"
+            },
+            "P_FILE_NAME": {
+                "type": "string"
+            }
+        },
+        "folder": {
+            "name": "Social Media"
+        },
+        "annotations": [],
+        "type": "Parquet",
+        "typeProperties": {
+            "location": {
+                "type": "AzureBlobFSLocation",
+                "fileName": {
+                    "value": "@dataset().P_FILE_NAME",
+                    "type": "Expression"
+                },
+                "folderPath": {
+                    "value": "@dataset().P_FILE_PATH",
+                    "type": "Expression"
+                },
+                "fileSystem": "filesystem001"
+            },
+            "compressionCodec": "snappy"
+        },
+        "schema": []
+    }
+}

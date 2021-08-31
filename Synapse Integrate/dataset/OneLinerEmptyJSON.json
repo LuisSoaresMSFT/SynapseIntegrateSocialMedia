@@ -1,0 +1,23 @@
+{
+    "name": "OneLinerEmptyJSON",
+    "properties": {
+        "linkedServiceName": {
+            "referenceName": "Your-Synapse-Workspace-Name-WorkspaceDefaultStorage",
+            "type": "LinkedServiceReference"
+        },
+        "folder": {
+            "name": "Social Media"
+        },
+        "annotations": [],
+        "type": "Json",
+        "typeProperties": {
+            "location": {
+                "type": "AzureBlobFSLocation",
+                "fileName": "oneLinerEmpty.JSON",
+                "folderPath": "socialmedia/supportingfiles",
+                "fileSystem": "filesystem001"
+            }
+        },
+        "schema": {}
+    }
+}

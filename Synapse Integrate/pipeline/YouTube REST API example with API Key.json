@@ -1,0 +1,326 @@
+{
+    "name": "YouTube REST API example with API Key",
+    "properties": {
+        "activities": [
+            {
+                "name": "Get playlistID",
+                "description": "https://developers.google.com/youtube/v3/guides/implementation/videos\nCall the channels.list method to retrieve the ID of the playlist that contains the channel's uploaded videos. The request's part parameter value must include contentDetails as one of the channel resource parts being retrieved. In the API response, the contentDetails.relatedPlaylists.uploads property contains the playlist ID.",
+                "type": "WebActivity",
+                "dependsOn": [
+                    {
+                        "activity": "Get YouTube API Key from Key Vault",
+                        "dependencyConditions": [
+                            "Succeeded"
+                        ]
+                    }
+                ],
+                "policy": {
+                    "timeout": "7.00:00:00",
+                    "retry": 0,
+                    "retryIntervalInSeconds": 30,
+                    "secureOutput": false,
+                    "secureInput": true
+                },
+                "userProperties": [],
+                "typeProperties": {
+                    "url": {
+                        "value": "@concat(\n'https://youtube.googleapis.com/youtube/v3/channels?part=contentDetails&id=',\npipeline().parameters.P_YOUTUBE_CHANNEL_ID,\n'&key=',\nactivity('Get YouTube API Key from Key Vault').output.value\n)",
+                        "type": "Expression"
+                    },
+                    "connectVia": {
+                        "referenceName": "AutoResolveIntegrationRuntime",
+                        "type": "IntegrationRuntimeReference"
+                    },
+                    "method": "GET"
+                }
+            },
+            {
+                "name": "Get Playlist Videos",
+                "type": "WebActivity",
+                "dependsOn": [
+                    {
+                        "activity": "Get playlistID",
+                        "dependencyConditions": [
+                            "Succeeded"
+                        ]
+                    }
+                ],
+                "policy": {
+                    "timeout": "7.00:00:00",
+                    "retry": 0,
+                    "retryIntervalInSeconds": 30,
+                    "secureOutput": false,
+                    "secureInput": false
+                },
+                "userProperties": [],
+                "typeProperties": {
+                    "url": {
+                        "value": "@concat(\n'https://youtube.googleapis.com/youtube/v3/playlistItems?part=snippet,contentDetails,status&maxResults=50&playlistId=',\nactivity('Get playlistID').output.items[0].contentDetails.relatedPlaylists.uploads,\n'&key=',\nactivity('Get YouTube API Key from Key Vault').output.value\n)",
+                        "type": "Expression"
+                    },
+                    "connectVia": {
+                        "referenceName": "AutoResolveIntegrationRuntime",
+                        "type": "IntegrationRuntimeReference"
+                    },
+                    "method": "GET"
+                }
+            },
+            {
+                "name": "For Each Video",
+                "type": "ForEach",
+                "dependsOn": [
+                    {
+                        "activity": "Get Playlist Videos",
+                        "dependencyConditions": [
+                            "Succeeded"
+                        ]
+                    }
+                ],
+                "userProperties": [],
+                "typeProperties": {
+                    "items": {
+                        "value": "@activity('Get Playlist Videos').output.items",
+                        "type": "Expression"
+                    },
+                    "isSequential": true,
+                    "activities": [
+                        {
+                            "name": "Get Video Stats",
+                            "type": "WebActivity",
+                            "dependsOn": [],
+                            "policy": {
+                                "timeout": "7.00:00:00",
+                                "retry": 0,
+                                "retryIntervalInSeconds": 30,
+                                "secureOutput": false,
+                                "secureInput": false
+                            },
+                            "userProperties": [],
+                            "typeProperties": {
+                                "url": {
+                                    "value": "@concat(\n'https://youtube.googleapis.com/youtube/v3/videos?part=snippet,contentDetails,statistics&id=',\nitem().snippet.resourceId.videoId,\n'&key=',\nactivity('Get YouTube API Key from Key Vault').output.value\n)",
+                                    "type": "Expression"
+                                },
+                                "connectVia": {
+                                    "referenceName": "AutoResolveIntegrationRuntime",
+                                    "type": "IntegrationRuntimeReference"
+                                },
+                                "method": "GET"
+                            }
+                        },
+                        {
+                            "name": "SQL pool SP - Insert data",
+                            "type": "SqlPoolStoredProcedure",
+                            "dependsOn": [
+                                {
+                                    "activity": "Get Video Stats",
+                                    "dependencyConditions": [
+                                        "Succeeded"
+                                    ]
+                                }
+                            ],
+                            "policy": {
+                                "timeout": "7.00:00:00",
+                                "retry": 0,
+                                "retryIntervalInSeconds": 30,
+                                "secureOutput": false,
+                                "secureInput": false
+                            },
+                            "userProperties": [],
+                            "sqlPool": {
+                                "referenceName": "sqlpool01",
+                                "type": "SqlPoolReference"
+                            },
+                            "typeProperties": {
+                                "storedProcedureName": "[dbo].[p_youtube_video_likes_insert]",
+                                "storedProcedureParameters": {
+                                    "p_item_id": {
+                                        "value": {
+                                            "value": "@item().id",
+                                            "type": "Expression"
+                                        },
+                                        "type": "String"
+                                    },
+                                    "p_likes": {
+                                        "value": {
+                                            "value": "@activity('Get Video Stats').output.items[0].statistics.likeCount",
+                                            "type": "Expression"
+                                        },
+                                        "type": "Int32"
+                                    },
+                                    "p_video_id": {
+                                        "value": {
+                                            "value": "@item().snippet.resourceId.videoId",
+                                            "type": "Expression"
+                                        },
+                                        "type": "String"
+                                    },
+                                    "p_full_json_response": {
+                                        "value": {
+                                            "value": "@string(activity('Get Video Stats').output)",
+                                            "type": "Expression"
+                                        },
+                                        "type": "String"
+                                    }
+                                }
+                            }
+                        },
+                        {
+                            "name": "Store Video Stats in Parquet",
+                            "type": "ExecutePipeline",
+                            "dependsOn": [
+                                {
+                                    "activity": "Get Video Stats",
+                                    "dependencyConditions": [
+                                        "Succeeded"
+                                    ]
+                                }
+                            ],
+                            "userProperties": [],
+                            "typeProperties": {
+                                "pipeline": {
+                                    "referenceName": "Store Parameter in Parquet File",
+                                    "type": "PipelineReference"
+                                },
+                                "waitOnCompletion": true,
+                                "parameters": {
+                                    "P_FILE_PATH": {
+                                        "value": "@concat(\npipeline().parameters.P_FILE_OUTPUT_PATH,\npipeline().parameters.P_SOCIAL_MEDIA_PLATFORM\n)",
+                                        "type": "Expression"
+                                    },
+                                    "P_FILE_NAME": {
+                                        "value": "@concat(\n'getVideoStats-',\nutcnow(),\n'.parquet'\n)",
+                                        "type": "Expression"
+                                    },
+                                    "P_DATA": {
+                                        "value": "@string(activity('Get Video Stats').output)",
+                                        "type": "Expression"
+                                    }
+                                }
+                            }
+                        }
+                    ]
+                }
+            },
+            {
+                "name": "Get YouTube API Key from Key Vault",
+                "description": "https://docs.microsoft.com/en-us/azure/data-factory/how-to-use-azure-key-vault-secrets-pipeline-activities",
+                "type": "WebActivity",
+                "dependsOn": [],
+                "policy": {
+                    "timeout": "7.00:00:00",
+                    "retry": 0,
+                    "retryIntervalInSeconds": 30,
+                    "secureOutput": true,
+                    "secureInput": false
+                },
+                "userProperties": [],
+                "typeProperties": {
+                    "url": "https://Your-Key-Vault-Name.vault.azure.net/secrets/YouTubeMicrosoftDemosProjectAPIKey/Replace-With-Key-Vault-Reference?api-version=7.0",
+                    "connectVia": {
+                        "referenceName": "AutoResolveIntegrationRuntime",
+                        "type": "IntegrationRuntimeReference"
+                    },
+                    "method": "GET",
+                    "authentication": {
+                        "type": "MSI",
+                        "resource": "https://vault.azure.net"
+                    }
+                }
+            },
+            {
+                "name": "Store playlistID result in Parquet",
+                "type": "ExecutePipeline",
+                "dependsOn": [
+                    {
+                        "activity": "Get playlistID",
+                        "dependencyConditions": [
+                            "Succeeded"
+                        ]
+                    }
+                ],
+                "userProperties": [],
+                "typeProperties": {
+                    "pipeline": {
+                        "referenceName": "Store Parameter in Parquet File",
+                        "type": "PipelineReference"
+                    },
+                    "waitOnCompletion": true,
+                    "parameters": {
+                        "P_FILE_PATH": {
+                            "value": "@concat(\npipeline().parameters.P_FILE_OUTPUT_PATH,\npipeline().parameters.P_SOCIAL_MEDIA_PLATFORM\n)",
+                            "type": "Expression"
+                        },
+                        "P_FILE_NAME": {
+                            "value": "@concat(\n'getPlaylistID-',\nutcnow(),\n'.parquet'\n)",
+                            "type": "Expression"
+                        },
+                        "P_DATA": {
+                            "value": "@string(activity('Get playlistID').output)",
+                            "type": "Expression"
+                        }
+                    }
+                }
+            },
+            {
+                "name": "Store Playlist Videos result in Parquet",
+                "type": "ExecutePipeline",
+                "dependsOn": [
+                    {
+                        "activity": "Get Playlist Videos",
+                        "dependencyConditions": [
+                            "Succeeded"
+                        ]
+                    }
+                ],
+                "userProperties": [],
+                "typeProperties": {
+                    "pipeline": {
+                        "referenceName": "Store Parameter in Parquet File",
+                        "type": "PipelineReference"
+                    },
+                    "waitOnCompletion": true,
+                    "parameters": {
+                        "P_FILE_PATH": {
+                            "value": "@concat(\npipeline().parameters.P_FILE_OUTPUT_PATH,\npipeline().parameters.P_SOCIAL_MEDIA_PLATFORM\n)",
+                            "type": "Expression"
+                        },
+                        "P_FILE_NAME": {
+                            "value": "@concat(\n'getPlaylistVideos-',\nutcnow(),\n'.parquet'\n)",
+                            "type": "Expression"
+                        },
+                        "P_DATA": {
+                            "value": "@string(activity('Get Playlist Videos').output)",
+                            "type": "Expression"
+                        }
+                    }
+                }
+            }
+        ],
+        "parameters": {
+            "P_SOCIAL_MEDIA_PLATFORM": {
+                "type": "string",
+                "defaultValue": "YouTube"
+            },
+            "P_YOUTUBE_CHANNEL_ID": {
+                "type": "string",
+                "defaultValue": "Your-YouTube-Channel-ID"
+            },
+            "P_FILE_OUTPUT_PATH": {
+                "type": "string",
+                "defaultValue": "socialmedia/runs/"
+            }
+        },
+        "variables": {
+            "V_DUMMY": {
+                "type": "String"
+            }
+        },
+        "folder": {
+            "name": "Social Media/YouTube"
+        },
+        "annotations": [],
+        "lastPublishTime": "2021-04-20T15:30:31Z"
+    },
+    "type": "Microsoft.Synapse/workspaces/pipelines"
+}

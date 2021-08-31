@@ -1,0 +1,103 @@
+{
+    "name": "Store Parameter in Parquet File",
+    "properties": {
+        "activities": [
+            {
+                "name": "Store parameter P_DATA in Parquet",
+                "type": "Copy",
+                "dependsOn": [],
+                "policy": {
+                    "timeout": "7.00:00:00",
+                    "retry": 0,
+                    "retryIntervalInSeconds": 30,
+                    "secureOutput": false,
+                    "secureInput": false
+                },
+                "userProperties": [],
+                "typeProperties": {
+                    "source": {
+                        "type": "JsonSource",
+                        "additionalColumns": [
+                            {
+                                "name": "VALUE_COLUMN",
+                                "value": {
+                                    "value": "@pipeline().parameters.P_DATA",
+                                    "type": "Expression"
+                                }
+                            }
+                        ],
+                        "storeSettings": {
+                            "type": "AzureBlobFSReadSettings",
+                            "recursive": false,
+                            "enablePartitionDiscovery": false
+                        },
+                        "formatSettings": {
+                            "type": "JsonReadSettings"
+                        }
+                    },
+                    "sink": {
+                        "type": "ParquetSink",
+                        "storeSettings": {
+                            "type": "AzureBlobFSWriteSettings"
+                        },
+                        "formatSettings": {
+                            "type": "ParquetWriteSettings"
+                        }
+                    },
+                    "enableStaging": false,
+                    "translator": {
+                        "type": "TabularTranslator",
+                        "mappings": [
+                            {
+                                "source": {
+                                    "path": "$['VALUE_COLUMN']"
+                                },
+                                "sink": {
+                                    "name": "VALUE_COLUMN"
+                                }
+                            }
+                        ],
+                        "mapComplexValuesToString": false
+                    }
+                },
+                "inputs": [
+                    {
+                        "referenceName": "OneLinerEmptyJSON",
+                        "type": "DatasetReference"
+                    }
+                ],
+                "outputs": [
+                    {
+                        "referenceName": "parameterOutputParquet",
+                        "type": "DatasetReference",
+                        "parameters": {
+                            "P_FILE_PATH": {
+                                "value": "@pipeline().parameters.P_FILE_PATH",
+                                "type": "Expression"
+                            },
+                            "P_FILE_NAME": {
+                                "value": "@pipeline().parameters.P_FILE_NAME",
+                                "type": "Expression"
+                            }
+                        }
+                    }
+                ]
+            }
+        ],
+        "parameters": {
+            "P_FILE_PATH": {
+                "type": "string"
+            },
+            "P_FILE_NAME": {
+                "type": "string"
+            },
+            "P_DATA": {
+                "type": "string"
+            }
+        },
+        "folder": {
+            "name": "Generic"
+        },
+        "annotations": []
+    }
+}
